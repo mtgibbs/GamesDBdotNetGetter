@@ -1,3 +1,4 @@
+var fs = require("fs");
 var request = require('request');
 var parseString = require('xml2js').parseString;
 
@@ -7,6 +8,7 @@ request('http://thegamesdb.net/api/GetPlatformsList.php', function(err, response
         console.error('Error getting platforms list!');
         return;
     }
+
     parseString(body, function(err, result) {
         var platforms = [];
 
@@ -19,13 +21,15 @@ request('http://thegamesdb.net/api/GetPlatformsList.php', function(err, response
             });
         });
 
-        var games = [];
         var getPlatformGamesEndpoint = 'http://thegamesdb.net/api/GetPlatformGames.php?platform=';
         platforms.forEach(function(platform) {
+
+            console.log('Fetching games for ' + platform.name);
+            
+            platform.games = [];
             request(getPlatformGamesEndpoint + platform.id, function(err, response, body) {
                 if (err) {
                     console.error('Error getting games list for ' + platform.name);
-                    return; // might remove this
                 } else {
                     parseString(body, function(err, result) {
                         if (err) {
@@ -34,11 +38,19 @@ request('http://thegamesdb.net/api/GetPlatformsList.php', function(err, response
                         }
 
                         result.Data.Game.forEach(function(game) {
-                            console.log(game);
+                            platform.games.push({
+                                id: game.id ? game.id[0] : null,
+                                title: game.GameTitle ? game.GameTitle[0] : null,
+                                releaseDate: game.ReleaseDate ? game.ReleaseDate[0] : null
+                            });
                         });
+
+                        var json = JSON.stringify(platforms, null, 4);
+
+                        fs.writeFileSync('games.json', json);
                     });
                 }
-            })
+            });
         });
     });
 });
