@@ -9,18 +9,20 @@ var THE_GAMES_DB_GET_PLATFORM_GAMES_URL = 'http://thegamesdb.net/api/GetPlatform
 // data that will be written out to the games.json at the end
 var data = [];
 
-Q.fcall(populatePlatforms)
+populatePlatforms()
     .then(populateGames)
     .then(populateDetails)
     .then(writeFile)
     .catch(function(err) {
         console.error(err);
+    })
+    .done(function() {
+        console.log('--== FINISHED ==--');
     });
-
 
 function populatePlatforms() {
 
-    console.log('Fetching platforms...');
+    console.log('--Fetching platforms');
 
     var deferred = Q.defer();
 
@@ -45,54 +47,71 @@ function populatePlatforms() {
                 });
             });
 
+            console.log('   Fetched ' + data.length + ' platforms.');
+
             // if I change the structure, pass the data back in the promise
             deferred.resolve(data);
         });
     });
 
-    return deferred.promise();
+    return deferred.promise;
 }
 
 function populateGames() {
-    var deferred = Q.defer();
-    data.forEach(function(platform) {
 
-        console.log('Fetching games for ' + platform.name);
+    var deferreds = [];
+    data.forEach(function(platform, index, array) {
 
-        platform.games = [];
+        deferreds.push(Q.defer());
+        array[index].games = [];
+
         request(THE_GAMES_DB_GET_PLATFORM_GAMES_URL + platform.id, function(err, response, body) {
+
+            console.log('   Fetching games for ' + platform.name);
             if (err) {
-                deferred.reject(err);
+                deferreds[index].reject(err);
                 return;
             }
 
             parseString(body, function(err, result) {
                 if (err) {
-                    deferred.reject(err);
+                    deferreds[index].reject(err);
                     return;
                 }
 
                 result.Data.Game.forEach(function(game) {
-                    platform.games.push({
+                    array[index].games.push({
                         id: game.id ? game.id[0] : null,
                         title: game.GameTitle ? game.GameTitle[0] : null,
                         releaseDate: game.ReleaseDate ? game.ReleaseDate[0] : null
                     });
                 });
+                console.log('   Fetched ' + platform.games.length + ' for ' + platform.name);
+                deferreds[index].resolve(data);
             });
         });
     });
 
-    return deferred.promise();
+    // get the promises off the array of deferreds
+    return Q.allSettled(deferreds.map(function(d) {
+        return d.promise;
+    }));
 }
 
 function populateDetails() {
+    var deferred = Q.defer();
+    deferred.resolve(data);
 
+    // TODO: loop over all of the details and get them
+    
+    return deferred.promise;
 }
 
 function writeFile() {
+    console.log('--Writing file: games.json');
     var deferred = Q.defer();
     var json = JSON.stringify(data, null, 4);
     fs.writeFileSync('games.json', json);
-    return deferred.resolve().promise();
+    deferred.resolve();
+    return deferred.promise;
 }
