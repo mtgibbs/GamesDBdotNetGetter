@@ -5,6 +5,7 @@ var parseString = require('xml2js').parseString;
 
 var THE_GAMES_DB_GET_PLATFORMS_URL = 'http://thegamesdb.net/api/GetPlatformsList.php';
 var THE_GAMES_DB_GET_PLATFORM_GAMES_URL = 'http://thegamesdb.net/api/GetPlatformGames.php?platform=';
+var THE_GAMES_DB_GET_GAME_DETAILS_URL = 'http://thegamesdb.net/api/GetGame.php?id=';
 
 // data that will be written out to the games.json at the end
 var data = [];
@@ -99,12 +100,40 @@ function populateGames() {
 }
 
 function populateDetails() {
-    var deferred = Q.defer();
-    deferred.resolve(data);
+    var deferreds = [];
 
-    // TODO: loop over all of the details and get them
-    
-    return deferred.promise;
+    data.forEach(function(platform, i, platforms) {
+        platform.games.forEach(function(game, j, games) {
+            var deferred = Q.defer();
+            deferreds.push(deferred.promise);
+
+            request(THE_GAMES_DB_GET_GAME_DETAILS_URL + game.id, function(err, response, body) {
+                if (err) {
+                    deferred.reject(err);
+                    return;
+                }
+
+                parseString(body, function(err, result) {
+                    if (err) {
+                        deferred.reject(err);
+                        return;
+                    }
+
+                    result.Data.Game.forEach(function(gameDetail) {
+                        game.overview = gameDetail.Overview ? gameDetail.Overview[0] : null;
+                        game.esrb = gameDetail.ESRB ? gameDetail.ESRB[0] : null;
+                        game.publisher = gameDetail.Publisher ? gameDetail.Publisher[0] : null;
+                        game.developer = gameDetail.Developer ? gameDetail.Developer[0] : null;
+                        game.players = gameDetail.Players ? gameDetail.Players[0] : null;
+                    });
+
+                    deferred.resolve(result);
+                });
+            });
+        });
+    });
+
+    return Q.allSettled(deferreds);
 }
 
 function writeFile() {
