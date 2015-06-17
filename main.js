@@ -127,6 +127,8 @@ function populateDetails() {
                         game.players = gameDetail.Players ? gameDetail.Players[0] : null;
                     });
 
+                    console.log('   Fetched details for ' + game.title);
+
                     deferred.resolve(result);
                 });
             });
