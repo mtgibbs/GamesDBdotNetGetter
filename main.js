@@ -70,13 +70,15 @@ function populateGames() {
 
             console.log('   Fetching games for ' + platform.name);
             if (err) {
-                deferreds[index].reject(err);
+                deferreds[index].resolve(err);
+                console.error('  Failed to fetch games for ' + platform.name);
                 return;
             }
 
             parseString(body, function(err, result) {
                 if (err) {
-                    deferreds[index].reject(err);
+                    deferreds[index].resolve(err);
+                    console.error('  Failed to fetch games for ' + platform.name);
                     return;
                 }
 
@@ -109,13 +111,17 @@ function populateDetails() {
 
             request(THE_GAMES_DB_GET_GAME_DETAILS_URL + game.id, function(err, response, body) {
                 if (err) {
-                    deferred.reject(err);
+                    deferred.resolve(err);
+                    console.error('Failed to get details for ' + game.title);
+                    console.error(err);
                     return;
                 }
 
                 parseString(body, function(err, result) {
                     if (err) {
-                        deferred.reject(err);
+                        deferred.resolve(err);
+                        console.error('Failed to get details for ' + game.title);
+                        console.error(err);
                         return;
                     }
 
