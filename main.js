@@ -1,7 +1,18 @@
 var fs = require('fs');
 var Q = require('q')
 var request = require('request');
+var async = require('async');
 var parseString = require('xml2js').parseString;
+var winston = require('winston');
+
+var logger = new winston.Logger({
+    transports: [
+        new(winston.transports.Console)(),
+        new(winston.transports.File)({
+            filename: 'test.log'
+        })
+    ]
+});
 
 var THE_GAMES_DB_GET_PLATFORMS_URL = 'http://thegamesdb.net/api/GetPlatformsList.php';
 var THE_GAMES_DB_GET_PLATFORM_GAMES_URL = 'http://thegamesdb.net/api/GetPlatformGames.php?platform=';
@@ -15,15 +26,15 @@ populatePlatforms()
     .then(populateDetails)
     .then(writeFile)
     .catch(function(err) {
-        console.error(err);
+        logger.error(err);
     })
     .done(function() {
-        console.log('--== FINISHED ==--');
+        logger.info('--== FINISHED ==--');
     });
 
 function populatePlatforms() {
 
-    console.log('--Fetching platforms');
+    logger.info('--Fetching platforms');
 
     var deferred = Q.defer();
 
@@ -48,7 +59,7 @@ function populatePlatforms() {
                 });
             });
 
-            console.log('   Fetched ' + data.length + ' platforms.');
+            logger.info('   Fetched ' + data.length + ' platforms.');
 
             // if I change the structure, pass the data back in the promise
             deferred.resolve(data);
@@ -60,45 +71,44 @@ function populatePlatforms() {
 
 function populateGames() {
 
-    var deferreds = [];
-    data.forEach(function(platform, index, array) {
+    var promises = [];
+    async.forEach(data, function(platform) {
 
-        deferreds.push(Q.defer());
-        array[index].games = [];
+        var deferred = Q.defer();
+        promises.push(deferred.promise);
+        platform.games = [];
 
         request(THE_GAMES_DB_GET_PLATFORM_GAMES_URL + platform.id, function(err, response, body) {
 
-            console.log('   Fetching games for ' + platform.name);
+            logger.info('   Fetching games for ' + platform.name);
             if (err) {
-                deferreds[index].resolve(err);
-                console.error('  Failed to fetch games for ' + platform.name);
+                deferred.resolve(err);
+                logger.error('  Failed to fetch games for ' + platform.name);
                 return;
             }
 
             parseString(body, function(err, result) {
                 if (err) {
-                    deferreds[index].resolve(err);
-                    console.error('  Failed to fetch games for ' + platform.name);
+                    deferred.resolve(err);
+                    logger.error('  Failed to fetch games for ' + platform.name);
                     return;
                 }
 
                 result.Data.Game.forEach(function(game) {
-                    array[index].games.push({
+                    platform.games.push({
                         id: game.id ? game.id[0] : null,
                         title: game.GameTitle ? game.GameTitle[0] : null,
                         releaseDate: game.ReleaseDate ? game.ReleaseDate[0] : null
                     });
                 });
-                console.log('   Fetched ' + platform.games.length + ' for ' + platform.name);
-                deferreds[index].resolve(data);
+                logger.info('   Fetched ' + platform.games.length + ' for ' + platform.name);
+                deferred.resolve(data);
             });
         });
     });
 
     // get the promises off the array of deferreds
-    return Q.allSettled(deferreds.map(function(d) {
-        return d.promise;
-    }));
+    return Q.allSettled(promises);
 }
 
 function populateDetails() {
@@ -112,16 +122,16 @@ function populateDetails() {
             request(THE_GAMES_DB_GET_GAME_DETAILS_URL + game.id, function(err, response, body) {
                 if (err) {
                     deferred.resolve(err);
-                    console.error('Failed to get details for ' + game.title);
-                    console.error(err);
+                    logger.error('Failed to get details for ' + game.title);
+                    logger.error(err);
                     return;
                 }
 
                 parseString(body, function(err, result) {
                     if (err) {
                         deferred.resolve(err);
-                        console.error('Failed to get details for ' + game.title);
-                        console.error(err);
+                        logger.error('Failed to get details for ' + game.title);
+                        logger.error(err);
                         return;
                     }
 
@@ -133,7 +143,7 @@ function populateDetails() {
                         game.players = gameDetail.Players ? gameDetail.Players[0] : null;
                     });
 
-                    console.log('   Fetched details for ' + game.title);
+                    logger.info('   Fetched details for ' + game.title);
 
                     deferred.resolve(result);
                 });
