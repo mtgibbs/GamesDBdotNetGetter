@@ -112,12 +112,12 @@ function populateGames() {
 }
 
 function populateDetails() {
-    var deferreds = [];
+    var promises = [];
 
-    data.forEach(function(platform, i, platforms) {
-        platform.games.forEach(function(game, j, games) {
+    async.forEach(data, function(platform) {
+        async.forEach(platform.games, function(game) {
             var deferred = Q.defer();
-            deferreds.push(deferred.promise);
+            promises.push(deferred.promise);
 
             request(THE_GAMES_DB_GET_GAME_DETAILS_URL + game.id, function(err, response, body) {
                 if (err) {
@@ -151,7 +151,7 @@ function populateDetails() {
         });
     });
 
-    return Q.allSettled(deferreds);
+    return Q.allSettled(promises);
 }
 
 function writeFile() {
